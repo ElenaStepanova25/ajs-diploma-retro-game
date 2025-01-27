@@ -1,0 +1,17 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "jest": true
+  },
+  "extends": ["airbnb-base", "plugin:jest/recommended"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-console": "warn",
+    "import/prefer-default-export": "off",
+    "max-len": ["error", { "code": 120 }] // Увеличиваем лимит длины строки до 120
+  }
+}
