@@ -80,11 +80,11 @@ export default class GameController {
       const playerChars = [];
       const enemyChars = [];
       this.gameState.positions.forEach((pos) => {
-        Object.setPrototypeOf(pos.character, Character.prototype);
-        if (this.gameState.playerTypes.some((item) => item === pos.character.type)) {
+        // Object.setPrototypeOf(pos.character, Character.prototype);
+        if (this.playerTypes.some((Type) => pos.character instanceof Type)) {
           playerChars.push(pos.character);
         }
-        if (this.gameState.enemyTypes.some((item) => item === pos.character.type)) {
+        if (this.enemyTypes.some((Type) => pos.character instanceof Type)) {
           enemyChars.push(pos.character);
         }
       });
@@ -98,13 +98,14 @@ export default class GameController {
   async onCellClick(index) {
     const currentCell = this.gamePlay.cells[index];
     const currentCellWithChar = currentCell.firstChild;
-    let isEnemy;
+    const character = currentCellWithChar ? this.findCharacter(index) : null;
+    const isEnemy = character && this.gameState.enemyTeam.characters.includes(character);
     let isAvailableToMove;
     let isAvailableToAttack;
 
-    if (currentCellWithChar) {
-      isEnemy = this.gameState.enemyTeam.characters.some((item) => currentCellWithChar.classList.contains(item.type));
-    }
+    //if (currentCellWithChar) {
+    //  isEnemy = this.gameState.enemyTeam.characters.some((item) => currentCellWithChar.classList.contains(item.type));
+    //}
 
     if (this.gameState.selectedCell) {
       isAvailableToMove = this.availableTo(index, this.gameState.selectedCellCoordinates, this.gameState.selectedCharacter.moveDist);
@@ -112,19 +113,19 @@ export default class GameController {
     }
 
     // выбрать персонажа (есть персонаж в клетке && персонаж свой)
-    if (currentCellWithChar && !isEnemy) {
+    if (character && !isEnemy) {
       this.gamePlay.deselectCell(this.gameState.selectedCellIndex);
       this.gamePlay.selectCell(index);
       this.gameState.selectedCell = currentCell;
       this.gameState.selectedCellIndex = index;
-      this.gameState.selectedCharacter = this.findCharacter(index);
+      this.gameState.selectedCharacter = character;
       this.gameState.selectedCellCoordinates = getCoordinates(index, this.gamePlay.boardSize);
     }
 
     // переместить персонажа в пустую клетку (в клетке нет персонажа && клетка в зоне хода)
     if (!currentCellWithChar && isAvailableToMove) {
       this.gamePlay.deselectCell(this.gameState.selectedCellIndex);
-      this.gamePlay.deselectCell(this.currentCellIdx);
+      //this.gamePlay.deselectCell(this.currentCellIdx);
       this.moveToAnEmptyCell(index);
       if (this.gameState.currentMove === 'player') {
         await this.enemyMove();
@@ -132,12 +133,11 @@ export default class GameController {
     }
 
     // атака (есть персонаж в клетке && персонаж противника)
-    if (currentCellWithChar && isEnemy) {
-      if (isAvailableToAttack) {
+    if (character && isEnemy && isAvailableToAttack) {
         this.gamePlay.deselectCell(this.gameState.selectedCellIndex);
-        this.gamePlay.deselectCell(this.currentCellIdx);
-        const enemyCharacter = this.findCharacter(index);
-        await this.attack(this.gameState.selectedCharacter, enemyCharacter, index);
+      //  this.gamePlay.deselectCell(this.currentCellIdx);
+      //  const enemyCharacter = this.findCharacter(index);
+        await this.attack(this.gameState.selectedCharacter, character, index);
         if (this.gameState.enemyTeam.characters.length === 0) {
           this.gameLevelUp();
           return;
@@ -145,28 +145,29 @@ export default class GameController {
         if (this.gameState.currentMove === 'player') {
           await this.enemyMove();
         }
-      } else {
+      } else if (character && isEnemy && !isAvailableToAttack) {
         GamePlay.showError('Этот игрок противника недоступен для атаки!');
       }
     }
-  }
 
   // НАВЕДЕНИЕ НА КЛЕТКУ
   onCellEnter(index) {
-    if (typeof this.currentCellIdx === 'number' && !this.gamePlay.cells[this.currentCellIdx].classList.contains('selected-yellow')) {
+    if (this.currentCellIdx === index) {
       this.gamePlay.deselectCell(this.currentCellIdx);
+      this.currentCellIdx = null;
     }
     const currentCell = this.gamePlay.cells[index];
     const currentCellWithChar = currentCell.firstChild;
-    let isEnemy;
+    const character = currentCellWithChar ? this.findCharacter(index) : null;
+    const isEnemy = character && this.gameState.enemyTeam.characters.includes(character);
     let isAvailableToMove;
     let isAvailableToAttack;
 
     // показать инфу (есть персонаж в клетке)
     if (currentCellWithChar) {
       this.gamePlay.setCursor(cursors.pointer);
-      this.gamePlay.showCellTooltip(getInfo(this.findCharacter(index)), index);
-      isEnemy = this.gameState.enemyTypes.some((item) => currentCellWithChar.classList.contains(item));
+      this.gamePlay.showCellTooltip(getInfo(character), index);
+      //isEnemy = this.gameState.enemyTypes.some((item) => currentCellWithChar.classList.contains(item));
     }
 
     if (this.gameState.selectedCell) {
@@ -174,39 +175,24 @@ export default class GameController {
       isAvailableToAttack = this.availableTo(index, this.gameState.selectedCellCoordinates, this.gameState.selectedCharacter.attackDist);
     }
 
-    // если есть выделенная клетка
     if (this.gameState.selectedCell) {
-      // если наведенная клетка в зоне хода
-      if (isAvailableToMove) {
-        // если наведенная клетка пустая
-        if (!currentCellWithChar) {
-          this.gamePlay.setCursor(cursors.pointer);
-          this.gamePlay.selectCell(index, 'green');
-        }
-      // если наведенная клетка НЕ в зоне хода
+      if (isAvailableToMove && !currentCellWithChar) {
+        this.gamePlay.setCursor(cursors.pointer);
+        this.gamePlay.selectCell(index, 'green');
+      } else if (currentCellWithChar && isEnemy && isAvailableToAttack) {
+        this.gamePlay.setCursor(cursors.crosshair);
+        this.gamePlay.selectCell(index, 'red');
       } else {
         this.gamePlay.setCursor(cursors.notallowed);
       }
-
-      // если в клетке персонаж противника
-      if (currentCellWithChar && isEnemy) {
-        // если в зоне атаки
-        if (isAvailableToAttack) {
-          this.gamePlay.setCursor(cursors.crosshair);
-          this.gamePlay.selectCell(index, 'red');
-        } else {
-          this.gamePlay.setCursor(cursors.notallowed);
-        }
-      }
     }
 
-    // если в наведенной клетке есть персонаж и он свой
     if (currentCellWithChar && !isEnemy) {
       this.gamePlay.setCursor(cursors.pointer);
     }
 
     this.currentCellIdx = index;
-  }
+  }  
 
   // ПОКИНУТЬ КЛЕТКУ
   onCellLeave(index) {
@@ -348,7 +334,7 @@ export default class GameController {
 
     // перебираем индексы персонажей в позициях; если персонаж противника, то переводим его индекс в координаты и добавляем в массив
     this.gameState.positions.forEach((item) => {
-      if (this.gameState.enemyTeam.characters.some((char) => char.type === item.character.type)) {
+      if (this.gameState.enemyTeam.characters.some((char) => char instanceof char.constructor)) {
         arrOfEnemyPos.push(item.position);
       }
     });
