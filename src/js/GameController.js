@@ -22,6 +22,26 @@ import Undead from './characters/Undead';
 import Vampire from './characters/Vampire';
 import Team from './Team';
 
+function restoreCharacter(data) {
+  const characterClasses = {
+    bowman: Bowman,
+    swordsman: Swordsman,
+    magician: Magician,
+    undead: Undead,
+    vampire: Vampire,
+    daemon: Daemon,
+  };
+
+  const CharacterClass = characterClasses[data.type];
+  if (!CharacterClass) {
+    throw new Error(`Unknown character type: ${data.type}`);
+  }
+
+  const character = new CharacterClass(data.level);
+  Object.assign(character, data); // Копируем свойства из данных в экземпляр
+  return character;
+}
+
 export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
@@ -69,27 +89,47 @@ export default class GameController {
       this.gameState = new GameState();
       this.gameState.level = loadedGame.level;
       this.gameState.charactersCount = loadedGame.charactersCount;
-      this.gameState.positions = loadedGame.positions;
+      // this.gameState.positions = loadedGame.positions;
       this.gameState.currentMove = loadedGame.currentMove;
       this.gameState.selectedCell = loadedGame.selectedCell;
       this.gameState.selectedCellIndex = loadedGame.selectedCellIndex;
-      this.gameState.selectedCharacter = loadedGame.selectedCharacter;
+      // this.gameState.selectedCharacter = loadedGame.selectedCharacter;
       this.gameState.selectedCellCoordinates = loadedGame.selectedCellCoordinates;
       this.gameState.isAvailableToMove = loadedGame.isAvailableToMove;
       this.gameState.isAvailableToAttack = loadedGame.isAvailableToAttack;
-      const playerChars = [];
-      const enemyChars = [];
-      this.gameState.positions.forEach((pos) => {
+     // const playerChars = [];
+     // const enemyChars = [];
+     // this.gameState.positions.forEach((pos) => {
         // Object.setPrototypeOf(pos.character, Character.prototype);
-        if (this.playerTypes.some((Type) => pos.character instanceof Type)) {
-          playerChars.push(pos.character);
-        }
-        if (this.enemyTypes.some((Type) => pos.character instanceof Type)) {
-          enemyChars.push(pos.character);
-        }
-      });
+       // if (this.playerTypes.some((Type) => pos.character instanceof Type)) {
+        //  playerChars.push(pos.character);
+        //}
+        // if (this.enemyTypes.some((Type) => pos.character instanceof Type)) {
+        //  enemyChars.push(pos.character);
+       // }
+     // });
+     // Восстанавливаем позиции и персонажей
+    this.gameState.positions = loadedGame.positions.map((pos) => {
+      const character = restoreCharacter(pos.character);
+      return new PositionedCharacter(character, pos.position);
+    });
+
+    // Восстанавливаем команды
+    const playerChars = this.gameState.positions
+      .filter((pos) => this.playerTypes.some((Type) => pos.character instanceof Type))
+      .map((pos) => pos.character);
+
+    const enemyChars = this.gameState.positions
+      .filter((pos) => this.enemyTypes.some((Type) => pos.character instanceof Type))
+      .map((pos) => pos.character);
+
       this.gameState.playerTeam = new Team(playerChars);
       this.gameState.enemyTeam = new Team(enemyChars);
+     // Восстанавливаем выделенного персонажа
+    if (loadedGame.selectedCharacter) {
+      this.gameState.selectedCharacter = restoreCharacter(loadedGame.selectedCharacter);
+    }
+      // отрисовываем поле
       this.drawBoard();
     }
   }
@@ -152,8 +192,8 @@ export default class GameController {
 
   // НАВЕДЕНИЕ НА КЛЕТКУ
   onCellEnter(index) {
-    if (this.currentCellIdx === index) {
-      this.gamePlay.deselectCell(this.currentCellIdx);
+    if (this.currentCellIdx !== index) {
+      this.gamePlay.deselectCell(this.currentCellIdx); // Снимаем выделение с предыдущей клетки
       this.currentCellIdx = null;
     }
     const currentCell = this.gamePlay.cells[index];
@@ -198,6 +238,8 @@ export default class GameController {
   onCellLeave(index) {
     this.gamePlay.setCursor(cursors.auto);
     this.gamePlay.hideCellTooltip(index);
+    this.gamePlay.deselectCell(index); // Снимаем выделение с клетки
+    this.currentCellIdx = null; // Сбрасываем текущую клетку
   }
 
   // ПЕРЕХОД НА СЛЕД. УРОВЕНЬ
